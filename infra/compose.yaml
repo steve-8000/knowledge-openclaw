@@ -243,6 +243,31 @@ services:
       - ingest-api
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # Doc Sync (filesystem → ki-db ingest)
+  # ---------------------------------------------------------------------------
+  doc-sync:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: doc-sync
+    container_name: kidb-doc-sync
+    environment:
+      DOCS_DIR: /docs
+      INGEST_API_URL: http://ingest-api:8080
+      TENANT_ID: "00000000-0000-0000-0000-000000000001"
+      STATE_FILE: /state/sync-state.json
+      SYNC_INTERVAL: "60s"
+    volumes:
+      - ../docs:/docs:ro
+      - docsync_state:/state
+    depends_on:
+      ingest-api:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   pgdata:
   natsdata:
+  docsync_state:
