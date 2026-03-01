@@ -1,0 +1,2 @@
+-- 000010_seed.down.sql
+DELETE FROM tenants WHERE tenant_id = '00000000-0000-0000-0000-000000000001';

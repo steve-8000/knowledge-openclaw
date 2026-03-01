@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * ki-db Dashboard — Pure Black Design System
+   * Design: achromatic base (#000) + cyan accent + warm secondary
+   * Philosophy: depth through luminosity, not color
+   */
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 93%;
+
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 93%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 93%;
+
+    --primary: 192 82% 48%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 80%;
+
+    --muted: 0 0% 7%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 93%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 93%;
+
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 192 82% 48%;
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-muted: 0 0% 8%;
+  }
+
+  /* .dark alias — identical to root for dark-only design */
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 93%;
+
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 93%;
+
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 93%;
+
+    --primary: 192 82% 48%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 80%;
+
+    --muted: 0 0% 7%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 93%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 93%;
+
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 192 82% 48%;
+
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-muted: 0 0% 8%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(1200px 500px at 10% -15%, hsl(var(--primary) / 0.04), transparent 70%),
+      radial-gradient(800px 400px at 90% -5%, hsl(24 80% 55% / 0.025), transparent 70%);
+  }
+
+  /* Scrollbar styling for premium dark feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0 0% 20%);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(0 0% 28%);
+  }
+
+  /* Selection highlight */
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(0 0% 100%);
+  }
+}

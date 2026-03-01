@@ -1,0 +1,248 @@
+services:
+  # ---------------------------------------------------------------------------
+  # ParadeDB: Postgres + pgvector + pg_search (BM25)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: paradedb/paradedb:latest
+    container_name: kidb-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kidb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kidb_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-kidb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kidb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # NATS with JetStream
+  # ---------------------------------------------------------------------------
+  nats:
+    image: nats:latest
+    container_name: kidb-nats
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+    volumes:
+      - natsdata:/data
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # DB Migration (run-once init)
+  # ---------------------------------------------------------------------------
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: migrate
+    container_name: kidb-migrate
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_USER:-kidb}:${POSTGRES_PASSWORD:-kidb_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Ingest API (Go)
+  # ---------------------------------------------------------------------------
+  ingest-api:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: ingest-api
+    container_name: kidb-ingest-api
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    ports:
+      - "${INGEST_API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Query API (Go)
+  # ---------------------------------------------------------------------------
+  query-api:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: query-api
+    container_name: kidb-query-api
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    ports:
+      - "${QUERY_API_PORT:-8081}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Outbox Relay
+  # ---------------------------------------------------------------------------
+  outbox-relay:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: outbox-relay
+    container_name: kidb-outbox-relay
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Workers
+  # ---------------------------------------------------------------------------
+  worker-parser:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: worker-parser
+    container_name: kidb-worker-parser
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker-chunker:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: worker-chunker
+    container_name: kidb-worker-chunker
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker-embedder:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: worker-embedder
+    container_name: kidb-worker-embedder
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker-graph:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: worker-graph
+    container_name: kidb-worker-graph
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker-quality:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend.Dockerfile
+      args:
+        SERVICE: worker-quality
+    container_name: kidb-worker-quality
+    env_file: ../.env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_APP_USER:-kidb_app}:${POSTGRES_APP_PASSWORD:-kidb_app_secret}@postgres:5432/${POSTGRES_DB:-kidb}?sslmode=disable
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Dashboard (Next.js)
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: ..
+      dockerfile: infra/docker/dashboard.Dockerfile
+      args:
+        NEXT_PUBLIC_QUERY_API_URL: http://localhost:${QUERY_API_PORT:-8081}
+        NEXT_PUBLIC_INGEST_API_URL: http://localhost:${INGEST_API_PORT:-8080}
+    container_name: kidb-dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      - query-api
+      - ingest-api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  natsdata:

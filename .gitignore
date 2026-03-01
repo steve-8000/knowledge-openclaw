@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.local
+
+# Go
+backend/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Node
+apps/dashboard/node_modules/
+apps/dashboard/.next/
+apps/dashboard/out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Data volumes
+data/
+tmp/

@@ -1,0 +1,521 @@
+openapi: 3.1.0
+info:
+  title: ki-db Knowledge Index API
+  version: 1.0.0
+  description: |
+    Postgres-centric Knowledge Index DB with hybrid BM25+vector search,
+    knowledge graph, and event-driven indexing pipeline.
+
+servers:
+  - url: http://localhost:8080
+    description: Ingest API
+  - url: http://localhost:8081
+    description: Query API
+
+components:
+  securitySchemes:
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+
+  schemas:
+    Document:
+      type: object
+      required: [doc_id, stable_key, doc_type, status]
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+        doc_id:
+          type: string
+          format: uuid
+        stable_key:
+          type: string
+        title:
+          type: string
+        doc_type:
+          type: string
+          enum: [report, adr, postmortem, snippet, glossary, guide, policy, other]
+        status:
+          type: string
+          enum: [inbox, published, deprecated, archived]
+        confidence:
+          type: string
+          enum: [high, med, low]
+        owners:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DocumentVersion:
+      type: object
+      properties:
+        version_id:
+          type: string
+          format: uuid
+        version_no:
+          type: integer
+        content_uri:
+          type: string
+        content_sha256:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDocumentRequest:
+      type: object
+      required: [stable_key, doc_type, content]
+      properties:
+        stable_key:
+          type: string
+        title:
+          type: string
+        doc_type:
+          type: string
+        content:
+          type: string
+          description: Raw text content of the document
+        owners:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: object
+
+    SearchResult:
+      type: object
+      properties:
+        chunk_id:
+          type: string
+          format: uuid
+        doc_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        heading_path:
+          type: string
+        chunk_text:
+          type: string
+        bm25_rank:
+          type: integer
+        ann_rank:
+          type: integer
+        rrf_score:
+          type: number
+        rerank_score:
+          type: number
+
+    ContextPack:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Citation'
+
+    Citation:
+      type: object
+      properties:
+        doc_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        heading_path:
+          type: string
+        chunk_id:
+          type: string
+          format: uuid
+        relevance:
+          type: string
+          enum: [keyword, semantic, both]
+
+    Edge:
+      type: object
+      properties:
+        from_doc_id:
+          type: string
+          format: uuid
+        to_doc_id:
+          type: string
+          format: uuid
+        to_external_key:
+          type: string
+        relation:
+          type: string
+          enum: [links_to, references, supersedes, duplicates, contradicts]
+
+    OpsStatus:
+      type: object
+      properties:
+        outbox_lag:
+          type: integer
+          description: Number of unpublished outbox events
+        workers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [healthy, degraded, down]
+              last_processed:
+                type: string
+                format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+security:
+  - TenantHeader: []
+
+paths:
+  # --- Ingest API ---
+  /api/v1/documents:
+    post:
+      tags: [Ingest]
+      summary: Create or update a document
+      operationId: createDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocumentRequest'
+      responses:
+        '201':
+          description: Document created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Ingest]
+      summary: List documents
+      operationId: listDocuments
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: doc_type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  total:
+                    type: integer
+
+  /api/v1/documents/{docID}:
+    get:
+      tags: [Ingest]
+      summary: Get document with versions
+      operationId: getDocument
+      parameters:
+        - name: docID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Document with versions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Document'
+                  - type: object
+                    properties:
+                      versions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DocumentVersion'
+
+  /api/v1/documents/{docID}/status:
+    patch:
+      tags: [Ingest]
+      summary: Update document status
+      operationId: updateDocumentStatus
+      parameters:
+        - name: docID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [inbox, published, deprecated, archived]
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doc_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+        '400':
+          description: Invalid status value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # --- Query API ---
+  /api/v1/search:
+    get:
+      tags: [Search]
+      summary: Hybrid search (BM25 + vector ANN + optional rerank)
+      operationId: search
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: rerank
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: doc_type
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results with context pack
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextPack'
+
+  /api/v1/feedback:
+    post:
+      tags: [Search]
+      summary: Submit search feedback
+      operationId: submitFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, chunk_id, helpful]
+              properties:
+                query:
+                  type: string
+                chunk_id:
+                  type: string
+                  format: uuid
+                helpful:
+                  type: boolean
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedback_id:
+                    type: string
+                    format: uuid
+
+  /api/v1/graph/ego:
+    get:
+      tags: [Graph]
+      summary: Get ego graph around a document
+      operationId: getEgoGraph
+      parameters:
+        - name: doc_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: hops
+          in: query
+          schema:
+            type: integer
+            default: 2
+      responses:
+        '200':
+          description: Graph nodes and edges
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+                  edges:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Edge'
+
+  /api/v1/ops/status:
+    get:
+      tags: [Ops]
+      summary: Get pipeline operational status
+      operationId: getOpsStatus
+      responses:
+        '200':
+          description: Operational status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsStatus'
+
+  /api/v1/ops/jobs:
+    get:
+      tags: [Ops]
+      summary: List recent indexing jobs
+      operationId: listJobs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed]
+      responses:
+        '200':
+          description: List of indexing jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event_id:
+                          type: string
+                          format: uuid
+                        event_type:
+                          type: string
+                        status:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                        published_at:
+                          type: string
+                          format: date-time
+
+  # --- Health ---
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
