@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { AlertCircle, Braces, Network, SearchX } from 'lucide-react';
 
 import { searchDocuments, DEFAULT_TENANT_ID, TENANT_STORAGE_KEY } from '@/lib/api/client';
@@ -148,7 +149,9 @@ export function SearchResults(): JSX.Element {
         {results.map((result) => (
           <article key={`${result.doc_id}:${result.chunk_id}`} className="rounded-lg border border-white/[0.06] bg-card p-4 shadow-sm transition-colors hover:bg-white/[0.03]">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold">{result.title}</h3>
+              <Link href={`/documents/${result.doc_id}`} className="font-semibold underline-offset-4 hover:underline">
+                {result.title}
+              </Link>
               {typeof result.bm25_rank === 'number' ? <Badge variant="outline">BM25 #{result.bm25_rank}</Badge> : null}
               {typeof result.ann_rank === 'number' ? <Badge variant="outline">ANN #{result.ann_rank}</Badge> : null}
               <Badge>{result.rrf_score.toFixed(3)}</Badge>

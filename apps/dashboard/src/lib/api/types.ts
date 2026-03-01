@@ -15,6 +15,23 @@ export interface Document {
   updated_at: string;
 }
 
+export interface DocumentVersion {
+  tenant_id: string;
+  doc_id: string;
+  version_id: string;
+  version_no: number;
+  content_uri?: string;
+  raw_text?: string;
+  normalized_text?: string;
+  content_sha256: string;
+  created_at: string;
+}
+
+export interface DocumentDetailResponse {
+  document: Document;
+  versions: DocumentVersion[];
+}
+
 export interface Citation {
   doc_id: string;
   version_id: string;

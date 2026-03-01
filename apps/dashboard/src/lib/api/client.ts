@@ -1,4 +1,4 @@
-import type { ContextPack, Document, GraphEgoResponse, IndexingJob, OpsJobsResponse, PipelineStatus } from '@/lib/api/types';
+import type { ContextPack, Document, DocumentDetailResponse, GraphEgoResponse, IndexingJob, OpsJobsResponse, PipelineStatus } from '@/lib/api/types';
 
 export const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
 export const TENANT_STORAGE_KEY = 'ki-db:tenant-id';
@@ -64,8 +64,8 @@ export async function listDocuments(tenantId?: string): Promise<Document[]> {
   return data.documents ?? [];
 }
 
-export function getDocument(documentId: string, tenantId?: string): Promise<Document> {
-  return apiFetch<Document>('ingest', `/api/v1/documents/${documentId}`, { tenantId });
+export function getDocument(documentId: string, tenantId?: string): Promise<DocumentDetailResponse> {
+  return apiFetch<DocumentDetailResponse>('ingest', `/api/v1/documents/${documentId}`, { tenantId });
 }
 
 export function updateDocumentStatus(docId: string, status: string, tenantId?: string): Promise<{ doc_id: string; status: string }> {

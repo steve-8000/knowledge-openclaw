@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
 import { DEFAULT_TENANT_ID, TENANT_STORAGE_KEY, listDocuments, apiFetch } from '@/lib/api/client';
@@ -90,7 +91,9 @@ export function CurationQueue(): JSX.Element {
           queue.map((item) => (
             <div key={item.doc_id} className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="font-medium">{item.title}</p>
+                <Link href={`/documents/${item.doc_id}`} className="font-medium underline-offset-4 hover:underline">
+                  {item.title}
+                </Link>
                 <p className="text-sm text-muted-foreground">Type: {item.doc_type}</p>
                 <Badge variant="outline" className="mt-2">
                   Confidence {item.confidence}
